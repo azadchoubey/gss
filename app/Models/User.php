@@ -19,12 +19,14 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'mobile',
         'password',
         'api_token',
         'role_id',
         'status',
         'parent_id',
-        'created_by'
+        'created_by',
+        'is_password_set'
     ];
 
     /**
