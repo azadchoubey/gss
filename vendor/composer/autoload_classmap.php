@@ -10,6 +10,7 @@ return array(
     'App\\Exceptions\\Handler' => $baseDir . '/app/Exceptions/Handler.php',
     'App\\Exports\\Case_export' => $baseDir . '/app/Exports/Case_export.php',
     'App\\Http\\Controllers\\ApiTokenController' => $baseDir . '/app/Http/Controllers/ApiTokenController.php',
+    'App\\Http\\Controllers\\Api\\CaseController' => $baseDir . '/app/Http/Controllers/Api/CaseController.php',
     'App\\Http\\Controllers\\Api\\MobileAuthController' => $baseDir . '/app/Http/Controllers/Api/MobileAuthController.php',
     'App\\Http\\Controllers\\AuthController' => $baseDir . '/app/Http/Controllers/AuthController.php',
     'App\\Http\\Controllers\\Auth\\ConfirmPasswordController' => $baseDir . '/app/Http/Controllers/Auth/ConfirmPasswordController.php',

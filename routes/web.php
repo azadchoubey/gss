@@ -131,7 +131,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/view',function(){
         $all = CaseModel::with('demagess.dem','manufacturers','companies','fual','c_branch','fo')->find(1);
     //    return  $all;
-    $qrcode = base64_encode(\QrCode::format('svg')->size(100)->errorCorrection('H')->generate(route('downloadreport',['id'=>1,'download'=>$all->images])));
+    $qrcode = base64_encode(\SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(100)->errorCorrection('H')->generate(route('downloadreport',['id'=>1,'download'=>$all->images])));
         PDF::setOptions(['dpi' => 150, 'defaultFont' => 'sans-serif']); 
         $pdf = PDF::loadView('pdf',['cases'=>$all,'qrcode'=>  $qrcode ]);
         $pdf->setPaper('A4', 'portrait');
@@ -146,4 +146,10 @@ Route::middleware('auth')->group(function () {
         return view('MisExcel',['ros'=>$Ros, 'companyies'=>$Company]);
     })->name('misdownload');
     Route::post('/misdownload',[CaseController::class, 'download']);
+    
+    // New routes for case editing
+    Route::get('/get-case-info/{id}',[CaseController::class, 'getCaseInfo']);
+    Route::put('/update-case/{id}',[CaseController::class, 'updateCase']);
+    Route::get('/get-manufacturers/{vehicleTypeId}',[CaseController::class, 'getManufacturers']);
+    Route::get('/get-branches/{companyId}',[CompanyBranchController::class, 'getBranches']);
 });

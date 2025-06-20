@@ -794,6 +794,7 @@ class ComposerStaticInita137dd790431d6bdd3be155b48422c4a
         'App\\Exceptions\\Handler' => __DIR__ . '/../..' . '/app/Exceptions/Handler.php',
         'App\\Exports\\Case_export' => __DIR__ . '/../..' . '/app/Exports/Case_export.php',
         'App\\Http\\Controllers\\ApiTokenController' => __DIR__ . '/../..' . '/app/Http/Controllers/ApiTokenController.php',
+        'App\\Http\\Controllers\\Api\\CaseController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/CaseController.php',
         'App\\Http\\Controllers\\Api\\MobileAuthController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/MobileAuthController.php',
         'App\\Http\\Controllers\\AuthController' => __DIR__ . '/../..' . '/app/Http/Controllers/AuthController.php',
         'App\\Http\\Controllers\\Auth\\ConfirmPasswordController' => __DIR__ . '/../..' . '/app/Http/Controllers/Auth/ConfirmPasswordController.php',

@@ -8,9 +8,20 @@ use Illuminate\Database\Eloquent\Model;
 class CaseModel extends Model
 {
     use HasFactory;
+    protected $table = "cases";
+
+    protected $fillable = [
+        'image_count',
+        'submitted_vehicle_no',
+        'fo_remarks',
+        'total_img_count',
+        'inspection_lat',
+        'inspection_long',
+        'submitted_at'
+    ];
 
    public function fo(){
-       return $this->belongsTo(Fo::class);
+       return $this->belongsTo(User::class,'fo_id','id');
    }
    public function companies(){
        return $this->belongsTo(Company::class,'company_name','id');

@@ -22,10 +22,12 @@ use ZipArchive;
 use App\Models\VehicleType;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Barryvdh\DomPDF\Facade as PDF;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Pagination\Paginator;
 use App\Exports\Case_export;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Maatwebsite\Excel\Facades\Excel as Excel;
 class CaseController extends Controller
@@ -163,6 +165,7 @@ class CaseController extends Controller
         $Company = Company::all();
         $vehicle = VehicleType::all();
         $branch = CompanyBranch::with('company')->get();
+        $manufacturers = Manufacturer::with('vehicletype')->get();
         if (Auth::user()->role_id == 2 || Auth::user()->role_id == 3) {
             $user = new User();
             $ro = $user->where(['id' => Auth::user()->id])->orWhere('parent_id', Auth::user()->id)->orWhere('id', Auth::user()->parent_id != 0 ? Auth::user()->parent_id : '')->get();
@@ -189,7 +192,7 @@ class CaseController extends Controller
             $cases = new CaseModel();
             $pagination = $cases->with('fo', 'companies.branch')->paginate(5);
         }
-        return view('CaseList', ['cases' =>   $pagination  , 'vehiles' => $vehilcetype, 'resquest' => $res,'branches' => $branch, 'companyies' => $Company,'vehicletypes' => $vehicle]);
+        return view('CaseList', ['cases' =>   $pagination  , 'vehiles' => $vehilcetype, 'resquest' => $res,'branches' => $branch, 'companyies' => $Company,'vehicletypes' => $vehicle, 'manufacturers' => $manufacturers]);
     }
     public function markqc(Request $request, $id)
     {
@@ -234,7 +237,7 @@ class CaseController extends Controller
                 $vehciledamges->save();
             }
             $all = CaseModel::with('demagess.dem','manufacturers','companies','fual','c_branch','fo')->find(decrypt($id));
-            $qrcode = base64_encode(\QrCode::format('svg')->size(100)->errorCorrection('H')->generate(route('downloadreport',['id'=>decrypt($id),'download'=> $path])));
+            $qrcode = base64_encode(QrCode::format('svg')->size(100)->errorCorrection('H')->generate(route('downloadreport',['id'=>decrypt($id),'download'=> $path])));
             PDF::setOptions(['dpi' => 150, 'defaultFont' => 'sans-serif']); 
             $pdf = PDF::loadView('pdf',['cases'=>$all,'qrcode'=>$qrcode]);
             $pdf->setPaper('A4', 'portrait');
@@ -285,7 +288,7 @@ class CaseController extends Controller
                 return response()->download($file);
             }else{
         $all = CaseModel::with('demagess.dem','manufacturers','companies','fual','c_branch','fo')->find($request->query('id'));
-        $qrcode = base64_encode(\QrCode::format('svg')->size(100)->errorCorrection('H')->generate(route('downloadreport',['id'=>$request->query('id'),'download'=>$request->query('download')])));
+        $qrcode = base64_encode(QrCode::format('svg')->size(100)->errorCorrection('H')->generate(route('downloadreport',['id'=>$request->query('id'),'download'=>$request->query('download')])));
         PDF::setOptions(['dpi' => 150, 'defaultFont' => 'sans-serif']); 
         $pdf = PDF::loadView('pdf',['cases'=>$all,'qrcode'=> $qrcode ]);
         $pdf->setPaper('A4', 'portrait');
@@ -325,6 +328,238 @@ class CaseController extends Controller
     {
         
         return Excel::download(new Case_export($request), rand(00000,99999).'.csv');
-    } 
+    }
+    
+    /**
+     * Get detailed case information for editing
+     *
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getCaseInfo($id)
+    {
+        try {
+            $case = CaseModel::with([
+                'companies', 
+                'c_branch', 
+                'fo', 
+                'manufacturers'
+            ])->findOrFail($id);
+            $data = [
+                'id' => $case->id,
+                'customer_name' => $case->customer_name,
+                'customer_no' => $case->customer_no,
+                'customer_address' => $case->customer_address,
+                'vehicle_category' => $case->vehicle_category,
+                'manufacturer' => $case->vehicle_manufacturer,
+                'vehicle_no' => $case->vehicle_no,
+                'chassis_no' => $case->chassis_no,
+                'engine_no' => $case->engine_no,
+                'company_id' => $case->company_name,
+                'branch_id' => $case->company_branch,
+                'icreferenceno' => $case->insurance_ref,
+                'vehicle_variant' => $case->vehicle_variant,
+                'inspection_date' => $case->inspection_date,
+                'imgstatus' => $case->imgstatus,
+                'images' => $case->imgstatus == 1 ? $this->getImagesList($case->images) : [],
+            ];
+            
+            return response()->json($data);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Case not found or ' . $e->getMessage()], 404);
+        }
+    }
+    
+    /**
+     * Get list of images from the case images directory
+     *
+     * @param string $imagesDir
+     * @return array
+     */
+    private function getImagesList($imagesDir)
+    {
+        // Remove 'storage/' prefix if present and add '/images' subdirectory
+        $cleanPath = str_replace('storage/', '', $imagesDir);
+        $imagesPath = storage_path('app/public/' . $cleanPath . '/images');
+        $images = [];
+        
+        // Log the path being checked for debugging
+        Log::info("Looking for images in: " . $imagesPath);
+        
+        if (File::exists($imagesPath)) {
+            $files = File::files($imagesPath);
+            Log::info("Found " . count($files) . " files in directory");
+            
+            foreach ($files as $file) {
+                $extension = strtolower($file->getExtension());
+                if (in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                    // Return relative path for use in frontend
+                    $relativePath = $cleanPath . '/images/' . $file->getFilename();
+                    $images[] = $relativePath;
+                    Log::info("Added image: " . $relativePath);
+                }
+            }
+        } else {
+            Log::warning("Images directory does not exist: " . $imagesPath);
+        }
+        
+        Log::info("Returning " . count($images) . " images");
+        return $images;
+    }
+    
+    /**
+     * Update case information
+     *
+     * @param Request $request
+     * @param int $id
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function updateCase(Request $request, $id)
+    {
+        try {
+            // Validate request
+            $this->validate($request, [
+                'customer_name' => 'required|string|max:255',
+                'customer_no' => 'required|string|max:20',
+                'customer_address' => 'required|string',
+                'vehicle_category' => 'required|exists:vehicle_types,id',
+                'vehicle_manufacturer' => 'required|exists:manufacturers,id',
+                'vehicle_no' => 'required|string|max:50',
+                'company' => 'required|exists:companies,id',
+                'branch' => 'required|exists:company_branches,id',
+                'case_images.*' => 'sometimes|image|mimes:jpeg,png,jpg|max:5120', // 5MB max per image
+            ]);
+            
+            // Find the case
+            $case = CaseModel::findOrFail($id);
+            
+            // Update customer info
+            $case->customer_name = $request->input('customer_name');
+            $case->customer_no = $request->input('customer_no');
+            $case->customer_address = $request->input('customer_address');
+            
+            // Update vehicle info
+            $case->vehicle_category = $request->input('vehicle_category');
+            $case->vehicle_manufacturer = $request->input('vehicle_manufacturer');
+            $case->vehicle_variant = $request->input('vehicle_variant');
+            $case->vehicle_no = $request->input('vehicle_no');
+            $case->chassis_no = $request->input('chassis_no');
+            $case->engine_no = $request->input('engine_no');
+            
+            // Update company info
+            $case->company_name = $request->input('company');
+            $case->company_branch = $request->input('branch');
+            $case->insurance_ref = $request->input('icreferenceno')?? '';
+            
+            if ($request->input('inspection_date')) {
+                $case->inspection_date = $request->input('inspection_date');
+            }
+            
+            // Handle image removal if imgstatus is 1 and images are marked for removal
+            if ($case->imgstatus == 1 && $request->has('images_to_remove')) {
+                $imagesToRemove = $request->input('images_to_remove');
+                $removedCount = 0;
+                
+                foreach ($imagesToRemove as $imagePath) {
+                    // Construct the full file path
+                    $fullPath = storage_path('app/public/' . $imagePath);
+                    
+                    if (File::exists($fullPath)) {
+                        try {
+                            File::delete($fullPath);
+                            $removedCount++;
+                            Log::info("Successfully removed image: {$imagePath}");
+                        } catch (\Exception $e) {
+                            Log::error("Failed to remove image {$imagePath}: " . $e->getMessage());
+                        }
+                    } else {
+                        Log::warning("Image not found for removal: {$fullPath}");
+                    }
+                }
+                
+                Log::info("Removed {$removedCount} images for case {$case->id}");
+            }
+            
+            // Handle image upload if files are provided and imgstatus is 1
+            if ($case->imgstatus == 1 && $request->hasFile('case_images')) {
+                // Extract the base path from the database (e.g., "storage/2023/March/29/2" -> "2023/March/29/2")
+                $basePath = str_replace('storage/', '', $case->images);
+                // Add '/images' subdirectory to match create_case method
+                $targetDir = $basePath . '/images';
+                
+                $uploadedCount = 0;
+                // Store each uploaded image using Laravel's storage system (default disk)
+                foreach ($request->file('case_images') as $image) {
+                    if ($image->isValid()) {
+                        $fileName = $image->getClientOriginalName();
+                        try {
+                            // Store the file using Laravel's storage system
+                            $stored = $image->storeAs($targetDir, $fileName, 'public');
+                            if ($stored) {
+                                $uploadedCount++;
+                                Log::info("Successfully uploaded: {$fileName} to {$targetDir}");
+                            }
+                        } catch (\Exception $e) {
+                            Log::error("Failed to upload {$fileName}: " . $e->getMessage());
+                        }
+                    }
+                }
+                
+                // Log the upload result for debugging
+                Log::info("Image upload attempt for case {$case->id}: {$uploadedCount} files uploaded to {$targetDir}");
+            }
+            
+            // Save changes
+            $case->save();
+            
+            // Return JSON response for AJAX requests
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Case updated successfully!',
+                    'case' => $case
+                ]);
+            }
+            
+            return redirect()->route('caselist')->with('status', 'Case updated successfully!');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Handle validation errors for AJAX requests
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $e->errors()
+                ], 422);
+            }
+            
+            return redirect()->back()->withErrors($e->errors())->withInput();
+        } catch (\Exception $e) {
+            // Return JSON response for AJAX requests
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to update case: ' . $e->getMessage()
+                ], 500);
+            }
+
+            return redirect()->back()->with('error', 'Failed to update case: ' . $e->getMessage())->withInput();
+        }
+    }
+    
+    /**
+     * Get manufacturers for a specific vehicle type
+     *
+     * @param int $vehicleTypeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getManufacturers($vehicleTypeId)
+    {
+        try {
+            $manufacturers = Manufacturer::where('v_id', $vehicleTypeId)->get();
+            return response()->json($manufacturers);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }
 

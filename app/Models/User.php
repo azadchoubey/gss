@@ -26,7 +26,9 @@ class User extends Authenticatable
         'status',
         'parent_id',
         'created_by',
-        'is_password_set'
+        'is_password_set',
+        'latitude',
+        'longitude',
     ];
 
     /**

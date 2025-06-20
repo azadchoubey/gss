@@ -103,4 +103,20 @@ class CompanyBranchController extends Controller
     {
         //
     }
+    
+    /**
+     * Get branches for a specific company
+     *
+     * @param int $companyId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getBranches($companyId)
+    {
+        try {
+            $branches = CompanyBranch::where('c_id', $companyId)->get();
+            return response()->json($branches);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }
